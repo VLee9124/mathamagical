@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MathaMAGICal: Validating Trajectory Data Attribution During Capability Acquisition</title>
+  <meta name="description" content="Full-run MAGIC attribution overflows and fails retraining checks; 100-step windows from a checkpoint validate at LDS 0.86-0.99. ATTRIB Workshop, NeurIPS 2026.">
+  <meta property="og:title" content="MathaMAGICal">
+  <meta property="og:description" content="Validating trajectory data attribution during capability acquisition.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="static/images/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="static/css/site.css?v=10">
+</head>
+<body>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<!-- Shared hatch patterns: the harmful tail is drawn hatched, as in the paper. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hatch-worked" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--surface)"/><rect width="3" height="6" fill="var(--fam-worked)"/></pattern>
+    <pattern id="hatch-primitive" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--surface)"/><rect width="3" height="6" fill="var(--fam-primitive)"/></pattern>
+    <pattern id="hatch-verbal" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--surface)"/><rect width="3" height="6" fill="var(--fam-verbal)"/></pattern>
+    <pattern id="hatch-code" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--surface)"/><rect width="3" height="6" fill="var(--fam-code)"/></pattern>
+    <pattern id="hatch-web" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--surface)"/><rect width="3" height="6" fill="var(--fam-web)"/></pattern>
+    <pattern id="hatch-nan" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--surface-2)"/><rect width="1.6" height="5" fill="var(--bad)"/></pattern>
+  </defs>
+</svg>
+
+<header class="nav">
+  <div class="nav-pill">
+    <a class="brand" href="#top">Matha<b>MAGIC</b>al</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#abstract">Abstract</a>
+      <a href="#pipeline">Method</a>
+      <a href="#horizon">Q1 Horizon</a>
+      <a href="#windows">Q2 Windows</a>
+      <a href="#resources">Artifacts</a>
+      <a href="#cite">Cite</a>
+    </nav>
+    <div class="progress" id="progress"></div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============ HERO ============ -->
+  <div class="hero wrap">
+    <span class="venue"><i></i>ATTRIB Workshop · NeurIPS 2026</span>
+    <h1>Matha<span class="magic">MAGIC</span>al</h1>
+    <p class="subtitle">Validating Trajectory Data Attribution During Capability Acquisition</p>
+
+    <div class="authors">
+      <a href="https://openreview.net/profile?id=~Jason_Lee12">Jason Lee<sup>*</sup></a>
+      <a href="https://openreview.net/profile?id=~Dikshanta_Pokhrel1">Dikshanta Pokhrel<sup>*</sup></a>
+      <a href="https://openreview.net/profile?id=~Phonn_Nay_Khant1">Phonn Nay Khant<sup>*</sup></a>
+      <a href="https://openreview.net/profile?id=~Victor_Lee3">Victor Lee<sup>*</sup></a>
+      <a href="https://openreview.net/profile?id=~Moritz_Weckbecker1">Moritz Weckbecker</a>
+      <a href="https://openreview.net/profile?id=~Sebastian_Lapuschkin1">Sebastian Lapuschkin</a>
+      <a href="https://openreview.net/profile?id=~Wojciech_Samek1">Wojciech Samek</a>
+      <a href="https://openreview.net/profile?id=~Mark_Riedl1">Mark Riedl</a>
+      <a href="https://openreview.net/profile?id=~Glenn_Matlin1">Glenn Matlin<sup>†</sup></a>
+    </div>
+    <!-- Affiliations are hidden for now. To restore: uncomment this block and put the keys back
+         on the names (🚀 Lee, Pokhrel, Khant, V. Lee, Weckbecker, Matlin · 🐻 V. Lee ·
+         ⚡ Weckbecker, Lapuschkin, Samek · 🏛️ Samek · 🐝 Riedl, Matlin).
+    <div class="affils">
+      <span>🚀 Algoverse AI Research</span>
+      <span>🐻 University of California, Los Angeles</span>
+      <span>⚡ Fraunhofer Heinrich Hertz Institute</span>
+      <span>🏛️ Technische Universität Berlin</span>
+      <span>🐝 Georgia Institute of Technology</span>
+    </div>
+    -->
+    <div class="byline-note">* Equal contribution · † Corresponding author</div>
+
+    <div class="links" id="links">
+      <a class="btn" data-link="paper"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>Paper</a>
+      <a class="btn" data-link="arxiv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4l14 16M19 4L5 20"/></svg>arXiv</a>
+      <a class="btn" data-link="code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg>Code</a>
+      <a class="btn" data-link="checkpoints"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>Checkpoints</a>
+      <a class="btn" data-link="corpus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>Corpus</a>
+      <a class="btn" data-link="poster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13"/><path d="M12 17v4M8 21h8"/></svg>Poster</a>
+    </div>
+
+    <!-- The paper's Figure 1, rebuilt for the page. -->
+    <figure class="figure overview reveal" id="fig-overview" aria-label="Overview of the method and the main result">
+      <div class="ov-grid">
+        <div class="ov-card" style="--i:0"><b>Corpus mix</b><p>Half real web text, half synthetic math.</p><p class="mono">3B tokens → 152M<br>1B tokens → 86M</p></div>
+        <div class="ov-card" style="--i:1"><b>Train from scratch</b><p>152M web+math, 91,553 steps. Solves 200/200 unseen compositions.</p></div>
+        <div class="ov-card anchor" style="--i:2"><b>Freeze windows</b><p>Four checkpoints across acquisition. Attribute only the next 100 steps.</p></div>
+        <div class="ov-card" style="--i:3"><b>Score</b><p>Differentiate held-out loss back through those steps (MAGIC).</p></div>
+        <div class="ov-card" style="--i:4"><b>Validate</b><p>48 retrains, 1% removed each; predicted vs. actual held-out change.</p></div>
+
+        <svg class="ov-wires" style="--i:5" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M100 0V60"/><path d="M500 0V26M400 26H800M400 26V60M800 26V60"/>
+        </svg>
+        <span class="ov-ask" style="--i:5">attribute a full run instead?</span>
+
+        <div class="ov-fam" style="--i:5">
+          <div class="ov-bar" role="img" aria-label="Corpus mix: 50% web text and 12.5% each of four arithmetic families">
+            <i style="--w:calc(50% - 2px);background:var(--fam-web)"></i><i style="--w:calc(12.5% - 2px);background:var(--fam-worked)"></i><i style="--w:calc(12.5% - 2px);background:var(--fam-primitive)"></i><i style="--w:calc(12.5% - 2px);background:var(--fam-verbal)"></i><i style="--w:12.5%;background:var(--fam-code)"></i>
+          </div>
+          <ul>
+            <li><i style="background:var(--fam-web)"></i>Web text<span>50%</span></li>
+            <li><i style="background:var(--fam-worked)"></i>Worked examples<span>12.5%</span></li>
+            <li><i style="background:var(--fam-primitive)"></i>Primitive facts<span>12.5%</span></li>
+            <li><i style="background:var(--fam-verbal)"></i>Verbal procedures<span>12.5%</span></li>
+            <li><i style="background:var(--fam-code)"></i>Code traces<span>12.5%</span></li>
+          </ul>
+        </div>
+
+        <div class="ov-out bad" style="--i:6">
+          <span class="ov-label">Whole run (86M)</span>
+          <div class="ov-shell">
+            <p><b>Attribute a full 86M run:</b> metagradient overflows by 30,518 steps; clipped scores fail.</p>
+            <div class="ov-lds"><span>LDS</span><b>0.17–0.22</b></div>
+          </div>
+          <span class="ov-verdict"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>does not predict retraining</span>
+        </div>
+
+        <div class="ov-out ok" style="--i:7">
+          <span class="ov-label">Short windows (152M)</span>
+          <div class="ov-shell">
+            <p><b>Attribute 100-step windows:</b> finite scores across four stages predict retraining.</p>
+            <div class="ov-lds"><span>LDS</span><b>0.86–0.99</b></div>
+          </div>
+          <span class="ov-verdict"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>predicts retraining outcomes</span>
+        </div>
+      </div>
+      <figcaption>
+        Models train from scratch on 50% web text and 50% synthetic arithmetic across four data families
+        (bar); 152M web+math solves all 200/200 held-out compositions. Differentiating held-out loss
+        through a full 86M run overflows and clipped scores fail retraining validation (LDS 0.17–0.22),
+        whereas short checkpoint windows validate at both scales (LDS 0.99 on 25-step 86M windows;
+        0.86–0.99 across four 100-step 152M windows).
+      </figcaption>
+    </figure>
+  </div>
+
+  <!-- ============ ABSTRACT ============ -->
+  <section id="abstract">
+    <div class="wrap">
+      <div class="abstract">
+        <h2 class="reveal">Abstract</h2>
+        <p class="reveal">
+          Influence-function-based methods like MAGIC provide exact first-order scores for trajectory
+          data attribution, yet only retraining indicates whether those scores accurately predict data
+          removal. We evaluate MAGIC on 86M- and 152M-parameter GPT-2-style models learning multistep
+          arithmetic from scratch on filtered web text and four synthetic math families. Full-run
+          attribution at 86M suffers from numerical overflow, and even with metagradient clipping,
+          scores correlate near chance with retraining (linear datamodeling score, LDS, 0.17–0.22).
+          In contrast, short checkpoint windows yield stable, accurate predictions at both scales
+          (LDS 0.86–0.99 across four 100-step windows at 152M), whereas a single-checkpoint
+          gradient-dot baseline shows near-zero correlation. Rankings of individual training blocks
+          predict retraining only within that single run and do not transfer across seeds or
+          hyperparameters (ρ ≤ 0.09), whereas format-level patterns replicate across runs. Two data
+          families, worked examples and primitive facts, occupy 2.1–2.6× their corpus share in both
+          the helpful and harmful 5% score tails, reflecting strong bidirectional local sensitivity
+          distinct from net benefit under multi-epoch family deletion. These results show that
+          trajectory attribution is reliable within short, validated windows and yields family-level
+          insights that generalize across runs.
+        </p>
+      </div>
+      <div class="notes">
+        <div class="note-card hue-blue reveal" style="--r:-1.3deg"><b>44.7%</b><span>of block scores are non-finite after a 30,518-step reverse pass at 86M</span></div>
+        <div class="note-card hue-cyan reveal" style="--r:0.9deg"><b>0.17–0.22</b><span>LDS for clipped full-run scores, where 0 is chance and 1 is exact rank agreement</span></div>
+        <div class="note-card hue-cream reveal" style="--r:-0.6deg"><b>0.86–0.99</b><span>median LDS across four 100-step windows on the 152M model</span></div>
+        <div class="note-card hue-peach reveal" style="--r:1.2deg"><b>≤ 0.09</b><span>rank correlation of block scores across seeds, batch sizes, and optimizers</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PIPELINE ============ -->
+  <section id="pipeline" class="band hue-blue">
+    <div class="wrap">
+      <p class="sec-tag plain">Method</p>
+      <h2 class="reveal">From a mixed corpus to a retraining check.</h2>
+      <p class="lede reveal">
+        Five steps. The third is the one the results turn on: we attribute a short continuation from a
+        saved checkpoint instead of the whole training run.
+      </p>
+      <figure class="figure reveal" id="fig-pipeline" aria-label="Walkthrough of the five pipeline steps">
+        <div class="pipe">
+          <div class="rail-col">
+            <div class="rail-head">
+              <span>Corpus → retraining check</span>
+              <button class="icon-btn" data-act="play" aria-label="Pause autoplay"></button>
+            </div>
+            <ol class="rail"></ol>
+          </div>
+          <div class="stage-visual"></div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============ HORIZON ============ -->
+  <section id="horizon" class="band hue-orange">
+    <div class="wrap">
+      <p class="sec-tag"><b>Q1</b>Horizon</p>
+      <p class="question">Can we attribute the entire training run?</p>
+      <h2 class="answer reveal"><span class="arrow" aria-hidden="true">→</span><span>The whole run is too long to differentiate.</span></h2>
+      <p class="lede reveal">
+        At 86M parameters the running metagradient grows by 0.4–0.5% with every step the reverse pass
+        unrolls. Over 30,518 steps that compounding overflows. Clipping restores finite numbers, not
+        predictive ones. Stopping the reverse pass after 100 steps gives both.
+      </p>
+
+      <figure class="figure reveal" id="fig-span">
+        <div class="figure-head">
+          <div>
+            <p class="figure-title">What each approach differentiates</p>
+            <p class="figure-sub">Same forward training. The difference is how far the reverse pass travels.</p>
+          </div>
+          <button class="replay" data-replay><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>Replay</button>
+        </div>
+        <div class="fig-scroll"></div>
+        <figcaption>
+          A 100-step window is 0.33% of the 30,518-step full run; the sliver on the lower track is drawn to
+          scale and the inset magnifies it. Each window resumes from a saved checkpoint on blocks the model
+          has not seen and attributes only that continuation.
+        </figcaption>
+      </figure>
+
+      <figure class="figure reveal" id="fig-lab">
+        <div class="figure-head">
+          <div>
+            <p class="figure-title">Explode, clip, shorten</p>
+            <p class="figure-sub">Three ways to run the reverse pass on the same 86M training run.</p>
+          </div>
+          <div class="seg" role="group" aria-label="Attribution setting">
+            <button data-act="0" aria-pressed="true">1 · Full run</button>
+            <button data-act="1" aria-pressed="false">2 · Full run, clipped</button>
+            <button data-act="2" aria-pressed="false">3 · 100-step window</button>
+          </div>
+        </div>
+        <div class="fig-scroll"></div>
+        <figcaption>
+          The growth band is drawn from the measured rate of 0.4–0.5% per step, as in the paper; the
+          non-finite share, the largest finite score, and every LDS value are measured. Cell colors on
+          the right are schematic stand-ins for block scores. The clip threshold is drawn without a scale.
+          Choosing the 100-step window zooms the axes to those 100 steps, where the same rate compounds
+          to a factor of about 1.5–1.6.
+        </figcaption>
+      </figure>
+
+      <figure class="figure reveal" id="fig-horizon-bars">
+        <div class="figure-head">
+          <div>
+            <p class="figure-title">Agreement with retraining returns as the horizon shrinks</p>
+            <p class="figure-sub">Mean per-query LDS at 86M. Longest horizon on the left.</p>
+          </div>
+        </div>
+        <div class="fig-scroll"></div>
+        <figcaption>
+          Window bars are at 256 rows per step. Step count and batch size co-vary across the 86M grid, so
+          the paper reads them jointly: 100-step windows at this batch span 0.57–0.94, and windows at 512
+          rows per step reach 0.90–0.99. Full-run values use 12 retraining subsets per seed (p = 0.50 and 0.60).
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============ WINDOWS ============ -->
+  <section id="windows" class="band hue-cyan">
+    <div class="wrap">
+      <p class="sec-tag"><b>Q2</b>Windows</p>
+      <p class="question">Do short windows agree with retraining?</p>
+      <h2 class="answer reveal"><span class="arrow" aria-hidden="true">→</span><span>Short windows validate before, during, and after the skill appears.</span></h2>
+      <p class="lede reveal">
+        The main 152M model goes from 0 to 200 of 200 held-out problems within the first third of
+        training. Four 100-step windows along that curve each get a grid of 48 retrains × 8 queries.
+        Median per-query LDS is <strong>at least 0.86 in all four windows and at least 0.99 in three</strong>;
+        the lowest is the window where accuracy first appears.
+      </p>
+
+      <figure class="figure reveal" id="fig-explorer">
+        <div class="figure-head">
+          <div>
+            <p class="figure-title">Four windows on one trajectory</p>
+            <p class="figure-sub">Drag the point along the curve, or pick a window. The panels follow the nearest window we measured.</p>
+          </div>
+          <div class="seg" role="group" aria-label="Attribution window"></div>
+        </div>
+        <div class="fig-scroll" data-part="curve"></div>
+        <div class="two" style="margin-top:14px">
+          <div>
+            <p class="figure-title" style="font-size:.94rem">Predicted vs. measured loss change</p>
+            <div data-part="scatter"></div>
+          </div>
+          <div>
+            <p class="figure-title" style="font-size:.94rem">Family share of the 5% score tails, as lift over corpus share</p>
+            <div data-part="lift"></div>
+            <div class="legend">
+              <span><i style="background:var(--ink-2)"></i>Most helpful 5%</span>
+              <span><i style="background:repeating-linear-gradient(45deg,var(--ink-2) 0 2px,transparent 2px 4px);border:1px solid var(--ink-2)"></i>Most harmful 5%</span>
+              <span><i class="line-key" style="border-color:var(--ink-3)"></i>Chance (1×)</span>
+            </div>
+          </div>
+        </div>
+        <figcaption>
+          The point reads its step and accuracy off the real curve. Attribution was validated at four
+          windows only, so the two panels switch between those four and nothing in between is interpolated.
+          Accuracy curve and scatter points are the paper's data: each scatter shows 48 removals of 1% of
+          blocks × 8 held-out queries, standardized per query. A lift of 1 means a family appears in a
+          tail as often as in the window. Worked examples lead before the skill appears, primitive facts
+          while it forms, and shares drift toward corpus proportions once the model saturates.
+        </figcaption>
+      </figure>
+
+      <figure class="figure reveal" id="fig-baseline">
+        <div class="figure-head">
+          <div>
+            <p class="figure-title">Unrolling is doing the work</p>
+            <p class="figure-sub">Mean per-query LDS on identical retraining subsets: MAGIC vs. a single-checkpoint gradient-dot baseline.</p>
+          </div>
+        </div>
+        <div class="fig-scroll"></div>
+        <div class="legend">
+          <span><i style="background:var(--mark);border-radius:50%"></i>Unrolled (MAGIC)</span>
+          <span><i style="background:var(--ink-3);border-radius:50%"></i>Gradient-dot at the starting checkpoint</span>
+        </div>
+        <figcaption>
+          Gradient-dot also puts arithmetic in its helpful tail, which looks plausible, but its scores do
+          not agree with retraining. TrackStar and SOURCE exceeded the compute budget and remain untested.
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============ RESOURCES ============ -->
+  <section id="resources">
+    <div class="wrap">
+      <p class="sec-tag plain">Artifacts</p>
+      <h2 class="reveal">Code, checkpoints, and data.</h2>
+      <div class="files reveal">
+        <!-- The code repository is still private. When it opens, turn this row back into
+             <a class="file" href="https://github.com/HCAI-Lab-GT/mathamagical"> and set LINKS.code in main.js. -->
+        <div class="file pending">
+          <span class="ficon hue-cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg></span>
+          <span><b>Code</b><span class="fdesc">Corpus builder, training, window attribution, and the retraining harness.</span></span>
+          <code>coming soon</code><span></span>
+        </div>
+        <a class="file" href="https://huggingface.co/leejason2025/mathamagical-checkpoints">
+          <span class="ficon hue-cream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 4l8 8-8 8-8-8z"/></svg></span>
+          <span><b>Checkpoints</b><span class="fdesc">The 86M and 152M runs, including the checkpoints each window resumes from.</span></span>
+          <code>huggingface.co/leejason2025/mathamagical-checkpoints</code><span class="go" aria-hidden="true">↗</span>
+        </a>
+        <a class="file" href="https://huggingface.co/datasets/leejason2025/mathamagical-3b-data">
+          <span class="ficon hue-peach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>
+          <span><b>3.0B-token corpus</b><span class="fdesc">Filtered FineWeb-Edu text mixed with the four synthetic arithmetic families.</span></span>
+          <code>huggingface.co/datasets/leejason2025/mathamagical-3b-data</code><span class="go" aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CITE ============ -->
+  <section id="cite">
+    <div class="wrap">
+      <p class="sec-tag plain">Citation</p>
+      <h2 class="reveal">BibTeX</h2>
+      <div class="bibtex reveal">
+        <button class="btn" id="copy-bib">Copy BibTeX</button>
+<pre id="bib">@inproceedings{lee2026mathamagical,
+  title     = {MathaMAGICal: Validating Trajectory Data Attribution
+               During Capability Acquisition},
+  author    = {Jason Lee and Dikshanta Pokhrel and Phonn Nay Khant and Victor Lee and
+               Moritz Weckbecker and Sebastian Lapuschkin and Wojciech Samek and
+               Mark Riedl and Glenn Matlin},
+  booktitle = {NeurIPS 2026 Workshop on Attributing Model Behavior at Scale (ATTRIB)},
+  year      = {2026}
+}</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Numbers on this page come from the paper's tables. The accuracy curve and scatter points are
+    recovered from its figures. Schematic elements are labeled where they appear.
+  </div>
+</footer>
+
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="static/js/background.js?v=10"></script>
+<script src="static/js/data.js?v=10"></script>
+<script src="static/js/figures.js?v=10"></script>
+<script src="static/js/main.js?v=10"></script>
+</body>
+</html>
