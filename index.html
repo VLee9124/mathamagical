@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="static/css/site.css?v=10">
+  <link rel="stylesheet" href="static/css/site.css?v=13">
 </head>
 <body>
 
@@ -35,6 +35,7 @@
     <a class="brand" href="#top">Matha<b>MAGIC</b>al</a>
     <nav class="nav-links" aria-label="Sections">
       <a href="#abstract">Abstract</a>
+      <a href="#background">Background</a>
       <a href="#pipeline">Method</a>
       <a href="#horizon">Q1 Horizon</a>
       <a href="#windows">Q2 Windows</a>
@@ -171,6 +172,41 @@
         <div class="note-card hue-cream reveal" style="--r:-0.6deg"><b>0.86–0.99</b><span>median LDS across four 100-step windows on the 152M model</span></div>
         <div class="note-card hue-peach reveal" style="--r:1.2deg"><b>≤ 0.09</b><span>rank correlation of block scores across seeds, batch sizes, and optimizers</span></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ BACKGROUND ============ -->
+  <section id="background" class="band hue-cream">
+    <div class="wrap">
+      <p class="sec-tag plain">Background</p>
+      <h2 class="reveal">What an influence score is, and how MAGIC computes it.</h2>
+      <p class="lede reveal">
+        Data attribution asks a counterfactual question: how would the trained model have turned out
+        if one piece of its training data had been left out? Retraining answers that directly.
+        Influence methods answer it with a derivative instead, and <strong>MAGIC is the version that
+        takes the derivative of the whole training run</strong>.
+      </p>
+      <figure class="figure reveal" id="fig-explainer">
+        <div class="figure-head">
+          <div>
+            <p class="figure-title">Three ways to answer “what if this block had been removed?”</p>
+            <p class="figure-sub">Left: what each method does to the training run. Right: what it tells us about the outcome.</p>
+          </div>
+          <div class="seg" role="group" aria-label="Method">
+            <button data-act="0" aria-pressed="true">1 · Retrain</button>
+            <button data-act="1" aria-pressed="false">2 · Influence function</button>
+            <button data-act="2" aria-pressed="false">3 · MAGIC</button>
+          </div>
+        </div>
+        <div class="fig-scroll"></div>
+        <div class="ex-note" aria-live="polite"></div>
+        <figcaption>
+          A schematic: the curve, the slopes, and the block colors are illustrative, not measurements.
+          A negative score means the block is helpful, since removing it raises held-out loss. The
+          single-checkpoint method compared against MAGIC in the paper is a gradient-dot baseline,
+          which drops the curvature term shown here.
+        </figcaption>
+      </figure>
     </div>
   </section>
 
@@ -389,9 +425,9 @@
 
 <div class="tip" id="tip" role="tooltip"></div>
 
-<script src="static/js/background.js?v=10"></script>
-<script src="static/js/data.js?v=10"></script>
-<script src="static/js/figures.js?v=10"></script>
-<script src="static/js/main.js?v=10"></script>
+<script src="static/js/background.js?v=13"></script>
+<script src="static/js/data.js?v=13"></script>
+<script src="static/js/figures.js?v=13"></script>
+<script src="static/js/main.js?v=13"></script>
 </body>
 </html>
