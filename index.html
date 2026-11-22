@@ -147,23 +147,15 @@
     <div class="wrap">
       <div class="abstract">
         <h2 class="reveal">Abstract</h2>
+        <!-- A shorter rewrite for the page. The paper's own abstract is in the PDF. -->
         <p class="reveal">
-          Influence-function-based methods like MAGIC provide exact first-order scores for trajectory
-          data attribution, yet only retraining indicates whether those scores accurately predict data
-          removal. We evaluate MAGIC on 86M- and 152M-parameter GPT-2-style models learning multistep
-          arithmetic from scratch on filtered web text and four synthetic math families. Full-run
-          attribution at 86M suffers from numerical overflow, and even with metagradient clipping,
-          scores correlate near chance with retraining (linear datamodeling score, LDS, 0.17–0.22).
-          In contrast, short checkpoint windows yield stable, accurate predictions at both scales
-          (LDS 0.86–0.99 across four 100-step windows at 152M), whereas a single-checkpoint
-          gradient-dot baseline shows near-zero correlation. Rankings of individual training blocks
-          predict retraining only within that single run and do not transfer across seeds or
-          hyperparameters (ρ ≤ 0.09), whereas format-level patterns replicate across runs. Two data
-          families, worked examples and primitive facts, occupy 2.1–2.6× their corpus share in both
-          the helpful and harmful 5% score tails, reflecting strong bidirectional local sensitivity
-          distinct from net benefit under multi-epoch family deletion. These results show that
-          trajectory attribution is reliable within short, validated windows and yields family-level
-          insights that generalize across runs.
+          MAGIC estimates how much each block of training data shaped a model's behavior by differentiating directly through the training trajectory. However, only retraining without a block proves whether those scores accurately predict what happens when data is removed. We tested this on 86M- and 152M-parameter models learning multistep arithmetic from scratch.
+        </p>
+        <p class="reveal">
+          Scoring an entire 86M run breaks down: the computation overflows, and even with gradient clipping, the scores barely outperform chance against actual retraining (LDS 0.17–0.22, where 0 is chance and 1 is perfect). In contrast, scoring short 100-step checkpoint windows remains stable and highly predictive at both model sizes, reaching an LDS of 0.86–0.99 at 152M.
+        </p>
+        <p class="reveal">
+          While rankings of individual data blocks are specific to a single run and do not transfer across random seeds or hyperparameters (rank correlation less than or equal to 0.09), broader patterns across data categories hold up consistently. Specifically, worked examples and primitive facts appear 2.1–2.6× more often than expected in both the top 5% most helpful and most harmful score tails—showing strong local sensitivity that differs from their net value when an entire category is removed. Together, these findings show that trajectory attribution is reliable within short, validated windows and uncovers category-level dynamics that generalize across runs.
         </p>
       </div>
       <div class="stats">
