@@ -1,7 +1,7 @@
 // Moving background: one folded ribbon down a neutral dark field. The sheet has an
 // orange face on each side of a crease; where the crease opens, a blue underside shows.
-// Outer edges fall off softly, the crease is crisp, and film grain breaks up every
-// gradient. A single fragment shader, drawn at screen resolution so the grain stays fine.
+// The page blurs this canvas heavily in CSS (#bg in site.css), so it only needs a small
+// buffer and no grain of its own. A single fragment shader does the drawing.
 // Falls back to the static CSS glows on <body> when WebGL is unavailable.
 (function () {
   'use strict';
@@ -16,8 +16,6 @@
     uniform vec2 u_res;
     uniform float u_t;
 
-    float hash(vec2 p) { p = fract(p * vec2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
-
     void main() {
       float asp = u_res.x / u_res.y;
       vec2 uv = (gl_FragCoord.xy - 0.5 * u_res) / u_res.y;   // y in -0.5..0.5, x scaled by aspect
@@ -25,14 +23,10 @@
       float y = uv.y, x = uv.x / s;
       float t = u_t * 0.06;
 
-      // Two grains, fixed to the screen: one roughens the edges, one speckles the color.
-      float g1 = hash(gl_FragCoord.xy) - 0.5;
-      float g2 = hash(gl_FragCoord.xy + 71.7) - 0.5;
-
       // The sheet: an S-shaped centre line and a width that breathes a little.
       float c = 0.105 * sin(y * 3.7 + 0.4 + t) + 0.010 * sin(y * 7.5 + 1.0 - 1.4 * t);   // one slow S down the screen
       float w = 0.43 + 0.050 * sin(y * 2.4 + 2.0 + 0.8 * t);
-      float u = (x - c) / w + g1 * 0.07;                    // -1 at the left edge, +1 at the right
+      float u = (x - c) / w;                                // -1 at the left edge, +1 at the right
 
       // The crease wanders across the sheet; the underside shows only along part of it.
       float f = -0.16 + 0.15 * sin(y * 2.9 + 2.2 - 0.9 * t);
@@ -56,11 +50,9 @@
       vec3 cool = mix(blue, cyan, under * under * 0.25);
 
       vec3 col = night;
-      col += warm * face * (1.0 - 0.80 * under) * 0.90;
-      col += cool * under * 0.74;
+      col += warm * face * (1.0 - 0.80 * under) * 0.66;      // held down so text stays the brightest thing
+      col += cool * under * 0.58;
 
-      float lit = max(face, under);
-      col += g2 * (0.036 + 0.095 * lit);                     // grain, stronger where there is color
       gl_FragColor = vec4(max(col, 0.0), 1.0);
     }`;
 
@@ -84,8 +76,8 @@
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 
   function resize() {
-    // Screen resolution (up to 2x, long side capped) so the grain is one pixel fine.
-    const k = Math.min(Math.min(2, devicePixelRatio || 1), 2400 / Math.max(innerWidth, innerHeight));
+    // The CSS blur hides any detail, so about 640 px on the long side is plenty.
+    const k = Math.min(1, 640 / Math.max(innerWidth, innerHeight));
     const w = Math.max(2, Math.round(innerWidth * k)), h = Math.max(2, Math.round(innerHeight * k));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
   }
