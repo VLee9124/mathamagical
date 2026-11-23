@@ -2,8 +2,8 @@
 (function () {
   // Fill these in as they go live. An empty string renders the button as "soon".
   const LINKS = {
-    paper: '',        // e.g. 'static/MathaMAGICal_ATTRIB2026.pdf' or the OpenReview URL
-    arxiv: '',        // e.g. 'https://arxiv.org/abs/XXXX.XXXXX'
+    paper: 'https://arxiv.org/pdf/2611.19692',   // the PDF served by arXiv
+    arxiv: 'https://arxiv.org/abs/2611.19692',
     poster: '',       // e.g. 'static/poster.pdf'
     code: '',         // 'https://github.com/HCAI-Lab-GT/mathamagical' once the repo is public
     checkpoints: 'https://huggingface.co/leejason2025/mathamagical-checkpoints',
