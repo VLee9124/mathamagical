@@ -137,6 +137,207 @@
     return { svg, x, y, lx, m, W, H: Hh, clip, path, under, over, at };
   }
 
+  // ====================================================== influence functions and MAGIC
+  // A schematic, not data: the chain on the left is training, the curve on the right is the
+  // counterfactual every attribution method tries to predict. The three modes show three ways
+  // of answering "what if this block had been removed?".
+  function explainer() {
+    const root = document.getElementById('fig-explainer'); if (!root) return;
+    const W = 960, Hh = 352;
+    const svg = S('svg', { viewBox: `0 0 ${W} ${Hh}`, role: 'img', 'aria-label': 'Left: training drawn as a chain of optimizer steps from a starting checkpoint to the final model and its held-out loss, with the blocks each step trains on. Right: held-out loss as a function of one block’s weight, from 0 (removed) to 1 (as trained). Retraining measures the true value at 0. An influence function extends an estimated slope from the final checkpoint. MAGIC extends the exact slope, found by differentiating back through every step.' });
+    root.querySelector('.fig-scroll').append(svg);
+    const note = root.querySelector('.ex-note');
+    const TRUTH = 'var(--ink)', IFC = 'var(--peach)', MGC = 'var(--cyan)';
+
+    // ---------------- left: training as a chain
+    const yF = 62, yS = 86, yM = yS + 17, bw = 50, bh = 34, yR = 216, cs = 16;
+    const sx = (i) => 86 + i * 66, xEnd = 566;
+    const labels = ['1', '2', '3', '…', 'T−1', 'T'], ASK = { step: 1, row: 1, col: 0 };
+    svg.append(S('text', { x: 20, y: 28, 'font-size': 13, 'font-weight': 600, class: 't-ink' }, 'Training, one optimizer step at a time'));
+    const early = S('g'), late = S('g'); svg.append(early, late);
+    early.append(S('line', { class: 'axis', x1: 46, x2: 524, y1: yM, y2: yM }));
+    early.append(S('line', { class: 'axis', x1: 46, x2: xEnd, y1: yF, y2: yF }));
+    // Every line that stands for a direction carries an arrowhead, at rest and in motion.
+    const head = (dir, fill) => S('path', { d: dir > 0 ? 'M0 0l-10 -6v12z' : 'M0 0l10 -6v12z', fill });
+    const chev = (x, y) => S('path', { d: `M${x - 3} ${y - 4}l4 4 -4 4`, fill: 'none', stroke: 'var(--ink-3)', 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    const fwdRest = head(1, 'var(--edge)'); fwdRest.setAttribute('transform', `translate(${xEnd + 8} ${yF})`);
+    const fwd = S('line', { x1: 46, x2: 46, y1: yF, y2: yF, stroke: 'var(--ink)', 'stroke-width': 3, 'stroke-linecap': 'round' });
+    const fwdHead = head(1, 'var(--ink)');
+    const fwdT = S('text', { x: 46, y: yF - 9, 'font-size': 11.5, class: 't-muted' }, 'forward: train');
+    early.append(fwdRest, fwd, fwdHead, fwdT);
+    const setFwd = (xf) => { fwd.setAttribute('x2', Math.max(46, xf - 2)); fwdHead.setAttribute('transform', `translate(${xf + 8} ${yF})`); };
+    // the chain itself reads left to right
+    early.append(chev(73, yM), chev(473, yM));
+    for (let i = 0; i < 5; i++) early.append(chev(86 + i * 66 + bw + 8, yM));
+    early.append(S('path', { d: `M34 ${yM}l12 -14 12 14 -12 14z`, fill: 'var(--surface-2)', stroke: 'var(--ink-2)', 'stroke-width': 1.5 }));
+    const startT = S('text', { x: 46, y: yM + 33, 'text-anchor': 'middle', 'font-size': 11, class: 't-muted' }, 'start θ');
+    startT.append(S('tspan', { dy: 3, 'font-size': 8 }, '0')); early.append(startT);
+    const rand = rng(23);
+    let askCell = null;
+    const steps = labels.map((l, i) => {
+      const x = sx(i);
+      const box = S('rect', { x, y: yS, width: bw, height: bh, rx: 7, fill: 'var(--surface-2)', stroke: 'var(--line)', 'stroke-width': 1.5 });
+      early.append(box, S('text', { x: x + bw / 2, y: yS + 22, 'text-anchor': 'middle', 'font-size': 12.5, class: 't-ink t-mono' }, l));
+      const cells = [];
+      if (l === '…') early.append(S('text', { x: x + bw / 2, y: yS + 84, 'text-anchor': 'middle', 'font-size': 16, class: 't-muted' }, '…'));
+      else for (let r = 0; r < 3; r++) for (let q = 0; q < 2; q++) {
+        const c = S('rect', { x: x + 7 + q * 19, y: yS + 52 + r * 19, width: cs, height: cs, rx: 3, fill: 'var(--mid)' });
+        const ask = i === ASK.step && r === ASK.row && q === ASK.col;
+        const cell = { c, v: ask ? -0.95 : rand() * 2 - 1, ask };
+        if (ask) askCell = cell;
+        early.append(c); cells.push(cell);
+      }
+      return { x, box, cells };
+    });
+    early.append(S('text', { x: 46, y: yS + 76, 'text-anchor': 'middle', 'font-size': 11, class: 't-muted' }, 'blocks'), S('text', { x: 46, y: yS + 90, 'text-anchor': 'middle', 'font-size': 11, class: 't-muted' }, 'per step'));
+    // the block the question is about
+    const ax = sx(ASK.step) + 7 + ASK.col * 19, ay = yS + 52 + ASK.row * 19;
+    const askRing = S('rect', { x: ax - 3, y: ay - 3, width: cs + 6, height: cs + 6, rx: 5, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2 });
+    const askLead = S('path', { d: `M${ax + cs / 2} ${ay + cs + 3}V250`, stroke: 'var(--accent)', 'stroke-width': 1.5, fill: 'none' });
+    const askT = S('text', { x: ax + cs / 2 - 6, y: 265, 'font-size': 12, class: 't-ink' }, '');
+    svg.append(askLead, askRing, askT);
+    // reverse track
+    early.append(S('line', { class: 'axis', x1: 46, x2: xEnd, y1: yR, y2: yR }));
+    const rev = S('line', { x1: xEnd, x2: xEnd, y1: yR, y2: yR, stroke: MGC, 'stroke-width': 3, 'stroke-linecap': 'round' });
+    const revRest = head(-1, 'var(--edge)'); revRest.setAttribute('transform', `translate(${46 - 8} ${yR})`);
+    early.append(revRest);
+    const revHead = head(-1, MGC); revHead.setAttribute('opacity', 0);
+    const revT = S('text', { x: xEnd, y: yR + 18, 'text-anchor': 'end', 'font-size': 11.5, class: 't-muted', opacity: 0 }, 'reverse: differentiate the loss back through every update');
+    early.append(rev, revHead, revT);
+    // final model and its held-out loss
+    const fin = S('circle', { cx: 494, cy: yM, r: 15, fill: 'var(--surface-2)', stroke: 'var(--ink-2)', 'stroke-width': 1.5 });
+    const finT = S('text', { x: 491, y: yM + 4, 'text-anchor': 'middle', 'font-size': 12.5, class: 't-ink' }, 'θ'); finT.append(S('tspan', { dy: 3, 'font-size': 8.5 }, 'T'));
+    const lossBox = S('rect', { x: 524, y: yS - 5, width: 84, height: 44, rx: 10, fill: 'var(--surface-2)', stroke: 'var(--ink-2)', 'stroke-width': 1.5 });
+    const lossT = S('text', { x: 566, y: yS + 13, 'text-anchor': 'middle', 'font-size': 11.5, class: 't-ink' }, 'held-out');
+    const lossT2 = S('text', { x: 566, y: yS + 28, 'text-anchor': 'middle', 'font-size': 11.5, class: 't-ink' }, 'loss');
+    late.append(S('line', { class: 'axis', x1: 509, x2: 524, y1: yM, y2: yM }), chev(517, yM), fin, finT, lossBox, lossT, lossT2);
+    const f1 = S('text', { x: 20, y: 308, 'font-size': 13, class: 't-ink t-mono' }, ''), f2 = S('text', { x: 20, y: 329, 'font-size': 12, class: 't-muted' }, '');
+    svg.append(f1, f2);
+
+    // ---------------- right: the question as a curve (illustrative shape)
+    const px0 = 690, px1 = 930, py0 = 290, py1 = 70;
+    const X = (w) => px0 + w * (px1 - px0), Y = (L) => py0 - L * (py0 - py1);
+    const loss = (w) => 0.30 + 0.34 * (1 - w) + 0.22 * (1 - w) * (1 - w);
+    const SL_TRUE = -0.34, SL_IF = -0.20, LA = loss(1), LB = loss(0);
+    svg.append(S('line', { x1: 652, x2: 652, y1: 18, y2: Hh - 14, stroke: 'var(--line)', 'stroke-width': 1 }));
+    svg.append(S('text', { x: 672, y: 28, 'font-size': 13, 'font-weight': 600, class: 't-ink' }, 'The same question, as a curve'));
+    svg.append(S('text', { x: 672, y: 50, 'font-size': 11, class: 't-muted' }, '↑ held-out loss after training'));
+    svg.append(S('line', { class: 'axis', x1: px0, x2: px1, y1: py0, y2: py0 }), S('line', { class: 'axis', x1: px0, x2: px0, y1: py1 - 8, y2: py0 }));
+    [[0, '0', 'removed', 'start'], [1, '1', 'as trained', 'end']].forEach(([w, a, b, anc]) => {
+      svg.append(S('line', { class: 'axis', x1: X(w), x2: X(w), y1: py0, y2: py0 + 4 }));
+      svg.append(S('text', { x: X(w), y: py0 + 17, 'text-anchor': 'middle', 'font-size': 11, class: 't-ink' }, a));
+      svg.append(S('text', { x: X(w), y: py0 + 31, 'text-anchor': anc, 'font-size': 11, class: 't-muted' }, b));
+    });
+    svg.append(S('text', { x: (px0 + px1) / 2, y: py0 + 31, 'text-anchor': 'middle', 'font-size': 11, class: 't-muted' }, 'weight w of block i'));
+    let d = ''; for (let k = 0; k <= 40; k++) { const w = k / 40; d += (k ? 'L' : 'M') + X(w).toFixed(1) + ' ' + Y(loss(w)).toFixed(1); }
+    svg.append(S('path', { d, fill: 'none', stroke: 'var(--ink-3)', 'stroke-width': 1.5, 'stroke-dasharray': '2 5', 'stroke-linecap': 'round' }));
+    const ifLine = S('line', { x1: X(1), y1: Y(LA), x2: X(1), y2: Y(LA), stroke: IFC, 'stroke-width': 2.5, 'stroke-dasharray': '7 5', 'stroke-linecap': 'round' });
+    const ifEnd = S('circle', { cx: X(0), cy: Y(LA - SL_IF), r: 5, fill: 'var(--surface)', stroke: IFC, 'stroke-width': 2.5, opacity: 0 });
+    const mgLine = S('line', { x1: X(1), y1: Y(LA), x2: X(1), y2: Y(LA), stroke: MGC, 'stroke-width': 3, 'stroke-linecap': 'round' });
+    const mgEnd = S('circle', { cx: X(0), cy: Y(LA - SL_TRUE), r: 5, fill: 'var(--surface)', stroke: MGC, 'stroke-width': 2.5, opacity: 0 });
+    const gap = S('g', { opacity: 0 }, S('path', { d: `M${px0 - 5} ${Y(LB)}h-6V${Y(LA - SL_TRUE)}h6`, fill: 'none', stroke: 'var(--ink-2)', 'stroke-width': 1.5 }));
+    const ptB = S('circle', { cx: X(0), cy: Y(LB), r: 5.5, fill: TRUTH, stroke: 'var(--surface)', 'stroke-width': 2, opacity: 0 });
+    const ptA = S('circle', { cx: X(1), cy: Y(LA), r: 5.5, fill: TRUTH, stroke: 'var(--surface)', 'stroke-width': 2 });
+    const ifHead = head(1, IFC), mgHead = head(1, MGC);
+    svg.append(ifLine, mgLine, ifHead, mgHead, ifEnd, mgEnd, gap, ptB, ptA);
+    svg.append(S('text', { x: X(1), y: Y(LA) + 20, 'text-anchor': 'end', 'font-size': 11.5, class: 't-ink' }, 'the run we have'));
+    // key, in the empty corner under the lines
+    const kx = px0 + 12, ky = 223;
+    const key = (row, mark, text) => { const g = S('g', { opacity: 0.25 }); g.append(mark(kx, ky + row * 18), S('text', { x: kx + 26, y: ky + row * 18 + 4, 'font-size': 11, class: 't-ink' }, text)); svg.append(g); return g; };
+    const keys = [
+      key(0, (x, y) => S('circle', { cx: x + 9, cy: y, r: 4.5, fill: TRUTH }), 'measured by retraining'),
+      key(1, (x, y) => S('line', { x1: x, x2: x + 18, y1: y, y2: y, stroke: IFC, 'stroke-width': 2.5, 'stroke-dasharray': '6 4' }), 'influence function'),
+      key(2, (x, y) => S('line', { x1: x, x2: x + 18, y1: y, y2: y, stroke: MGC, 'stroke-width': 3 }), 'MAGIC'),
+      key(3, (x, y) => S('path', { d: `M${x + 12} ${y - 5}h-6v10h6`, fill: 'none', stroke: 'var(--ink-2)', 'stroke-width': 1.5 }), 'what a line misses'),
+    ];
+
+    const MODES = [
+      { name: 'Ground truth: retrain without the block',
+        body: 'Set the block’s weight to 0, train again from the same start, and compare the held-out loss. This is the answer every attribution method is trying to predict.',
+        cost: 'cost: one more training run for every question asked',
+        ask: 'block i removed: w = 0', f1: 'ΔL = L(retrained without block i) − L(the run we have)', f2: 'exact, and far too expensive to repeat for every block' },
+      { name: 'Influence function: estimate the slope at the final checkpoint',
+        body: 'Skip the retraining. Ask how fast the loss changes as the block’s weight moves away from 1, and extend that straight line to 0. The classical recipe reads the slope off the trained model alone, which assumes training has settled into a minimum and ignores the path that led there.',
+        cost: 'cost: a few gradients and a curvature solve, at one checkpoint',
+        ask: 'block i: w nudged away from 1', f1: 'score ≈ −∇L(held-out)ᵀ · H⁻¹ · ∇L(block i),  all at θT', f2: 'the steps between θ0 and θT are never looked at' },
+      { name: 'MAGIC: differentiate the training run itself',
+        body: 'Replay training exactly, then backpropagate from the held-out loss through every optimizer update. One reverse pass returns the exact slope for every block the run touched. It is still a straight line, so it has to be checked against retraining.',
+        cost: 'cost: one replay and one reverse pass, for all blocks at once',
+        ask: 'block i: w nudged away from 1', f1: 'score = dL(held-out) / dw,  carried back through θT, …, θ1, θ0', f2: 'one reverse pass gives the exact slope for every block' },
+    ];
+    const btns = [...root.querySelectorAll('.seg button')];
+    let tok = null, auto = !RM;
+    const paintCells = (xr) => steps.forEach((sp) => sp.cells.forEach((cell) => {
+      const on = xr != null && xr < sp.x + bw / 2;
+      cell.c.setAttribute('fill', on ? (cell.v < 0 ? 'var(--neg)' : 'var(--pos)') : 'var(--mid)');
+      cell.c.setAttribute('opacity', on ? 0.3 + 0.7 * Math.abs(cell.v) : 1);
+    }));
+    const lightBoxes = (xf, color) => steps.forEach((sp) => sp.box.setAttribute('stroke', xf != null && xf > sp.x + bw / 2 ? color : 'var(--line)'));
+    // Draw an extrapolation line out to fraction t of the way to w = 0. Its arrowhead rides the
+    // tip and stops at the rim of the hollow marker that holds the predicted value.
+    const lineTo = (el, hd, slope, t) => {
+      const x0 = X(1), y0 = Y(LA), dx = X(0) - x0, dy = Y(LA - slope) - y0, len = Math.hypot(dx, dy);
+      const tipAt = t * (len - 7), ux = dx / len, uy = dy / len;
+      const base = Math.max(0, tipAt - 9);
+      el.setAttribute('x2', x0 + ux * base); el.setAttribute('y2', y0 + uy * base);
+      hd.setAttribute('transform', `translate(${x0 + ux * tipAt} ${y0 + uy * tipAt}) rotate(${(Math.atan2(dy, dx) * 180) / Math.PI})`);
+      hd.setAttribute('opacity', tipAt > 12 ? el.getAttribute('opacity') || 1 : 0);
+    };
+
+    async function run(m) {
+      if (tok) tok.cancelled = true; const my = (tok = { cancelled: false });
+      const M = MODES[m];
+      btns.forEach((b, i) => b.setAttribute('aria-pressed', i === m));
+      note.replaceChildren(H('b', { text: M.name }), H('p', { text: M.body }), H('span', { class: 'cost', text: M.cost }));
+      askT.textContent = M.ask; f1.textContent = M.f1; f2.textContent = M.f2;
+      // reset
+      early.setAttribute('opacity', m === 1 ? 0.3 : 1);
+      [fin, lossBox].forEach((e) => e.setAttribute('stroke', m === 1 ? IFC : 'var(--ink-2)'));
+      setFwd(46); [fwd, fwdHead].forEach((e) => e.setAttribute('opacity', 0));
+      rev.setAttribute('x2', xEnd); rev.setAttribute('opacity', 0); revHead.setAttribute('opacity', 0); revT.setAttribute('opacity', 0);
+      lossT2.textContent = 'loss'; paintCells(null); lightBoxes(null);
+      askCell.c.setAttribute('stroke', 'none'); askCell.c.removeAttribute('stroke-dasharray');
+      ifLine.setAttribute('opacity', m === 2 ? 0.4 : 1); lineTo(ifLine, ifHead, SL_IF, m === 2 ? 1 : 0); ifEnd.setAttribute('opacity', m === 2 ? 0.4 : 0);
+      lineTo(mgLine, mgHead, SL_TRUE, 0); mgEnd.setAttribute('opacity', 0); gap.setAttribute('opacity', 0);
+      ptB.setAttribute('opacity', m === 0 ? 0 : 1);
+      keys.forEach((k, i) => k.setAttribute('opacity', i === 0 || (i === 1 && m >= 1) || (i >= 2 && m === 2 && i === 2) ? 1 : 0.25));
+
+      const span = xEnd - 46;
+      if (m === 0) {
+        askCell.c.setAttribute('fill', 'var(--surface)'); askCell.c.setAttribute('stroke', 'var(--ink-3)'); askCell.c.setAttribute('stroke-dasharray', '3 3');
+        [fwd, fwdHead].forEach((e) => e.setAttribute('opacity', 1));
+        await tween(1100, (t) => { const xf = 46 + span * t; setFwd(xf); lightBoxes(xf, 'var(--ink)'); }, my, true);
+        if (my.cancelled) return;
+        lossT2.textContent = 'loss, again';
+        await tween(350, (t) => ptB.setAttribute('opacity', t), my);
+      } else if (m === 1) {
+        await tween(900, (t) => lineTo(ifLine, ifHead, SL_IF, t), my);
+        if (my.cancelled) return;
+        ifEnd.setAttribute('opacity', 1);
+      } else {
+        [fwd, fwdHead].forEach((e) => e.setAttribute('opacity', 1));
+        await tween(700, (t) => { const xf = 46 + span * t; setFwd(xf); lightBoxes(xf, 'var(--ink)'); }, my, true);
+        if (my.cancelled) return;
+        rev.setAttribute('opacity', 1); revHead.setAttribute('opacity', 1); revT.setAttribute('opacity', 1);
+        await tween(1500, (t) => {
+          const xr = xEnd - span * t; rev.setAttribute('x2', Math.min(xEnd, xr + 2)); revHead.setAttribute('transform', `translate(${xr - 8} ${yR})`);
+          paintCells(xr);
+          steps.forEach((sp) => sp.box.setAttribute('stroke', xr < sp.x + bw / 2 ? MGC : 'var(--ink)'));
+        }, my, true);
+        if (my.cancelled) return;
+        await tween(800, (t) => lineTo(mgLine, mgHead, SL_TRUE, t), my);
+        if (my.cancelled) return;
+        mgEnd.setAttribute('opacity', 1); gap.setAttribute('opacity', 1); keys[3].setAttribute('opacity', 1);
+      }
+      if (!auto) return;
+      await sleep(m === 1 ? 4200 : 3400);
+      if (!my.cancelled && auto && m < 2) run(m + 1);
+    }
+    btns.forEach((b, i) => b.addEventListener('click', () => { auto = false; run(i); }));
+    let seen = false;
+    onVisible(root, () => { if (!seen) { seen = true; run(0); } });
+  }
+
   // ====================================================== pipeline stepper
   const SCENES = [
     {
@@ -1015,7 +1216,7 @@
   }
 
   // -------------------------------------------------------------------- go
-  [pipeline, spanFigure, lab, horizonBars, explorer, baseline, transfer, deletion].forEach((f) => {
+  [explainer, pipeline, spanFigure, lab, horizonBars, explorer, baseline, transfer, deletion].forEach((f) => {
     try { f(); } catch (e) { console.error('figure failed:', f.name, e); }
   });
 })();
