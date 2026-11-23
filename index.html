@@ -149,10 +149,7 @@
         <h2 class="reveal">Abstract</h2>
         <!-- A shorter rewrite for the page. The paper's own abstract is in the PDF. -->
         <p class="reveal">
-          MAGIC estimates how much each block of training data shaped a model's behavior by differentiating directly through the training trajectory. However, only retraining without a block proves whether those scores accurately predict what happens when data is removed. We tested this on 86M- and 152M-parameter models learning multistep arithmetic from scratch.
-        </p>
-        <p class="reveal">
-          Scoring an entire 86M run breaks down: the computation overflows, and even with metagradient clipping, the scores barely outperform chance against actual retraining (LDS 0.17–0.22, where 0 is chance and 1 is perfect). In contrast, scoring short 100-step checkpoint windows remains stable and highly predictive at both model sizes, reaching an LDS of 0.86–0.99 at 152M.
+          MAGIC estimates how much each block of training data shaped a model's behavior by differentiating directly through the training trajectory, but retraining without a block proves whether those scores predict what happens when data is removed. We tested this on 86M- and 152M-parameter GPT-2 models learning multistep arithmetic from scratch. Scoring an entire 86M run breaks down, overflowing and barely outperforming random chance against retraining even with metagradient clipping, while scoring a short 100-step checkpoint windows stays stable and highly predictive at both model sizes.
         </p>
         <p class="reveal">
           While rankings of individual data blocks are specific to a single run and do not transfer across random seeds or hyperparameters (rank correlation less than or equal to 0.09), broader patterns across data families hold up consistently. Specifically, worked examples and primitive facts appear at 2.1–2.6× their share of the corpus in both the top 5% most helpful and most harmful score tails—showing strong local sensitivity that differs from their net value when an entire family is removed. Together, these findings show that trajectory attribution is reliable within short, validated windows and uncovers family-level dynamics that generalize across runs.
